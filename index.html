@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D GitHub Shooter</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial; }
+        #crosshair { position: fixed; top: 50%; left: 50%; width: 20px; height: 20px; 
+                     border: 2px solid red; border-radius: 50%; transform: translate(-50%, -50%); 
+                     pointer-events: none; }
+        #ui { position: fixed; bottom: 20px; left: 20px; color: white; font-size: 24px; }
+    </style>
+</head>
+<body>
+    <div id="crosshair"></div>
+    <div id="ui">Score: <span id="score">0</span></div>
+
+    <!-- Import Three.js and PointerLockControls from CDN -->
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'https://unpkg.com';
+
+        // 1. Setup Scene, Camera, and Renderer
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Sky blue
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. Add Lighting
+        const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+        scene.add(light);
+
+        // 3. Create the World (Ground)
+        const planeGeo = new THREE.PlaneGeometry(100, 100);
+        const planeMat = new THREE.MeshPhongMaterial({ color: 0x228b22 });
+        const floor = new THREE.Mesh(planeGeo, planeMat);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // 4. Player Controls
+        const controls = new PointerLockControls(camera, document.body);
+        document.addEventListener('click', () => controls.lock());
+        camera.position.set(0, 1.6, 5); // Human height
+
+        // 5. Shooting Logic (Raycasting)
+        const raycaster = new THREE.Raycaster();
+        let score = 0;
+        const targets = [];
+
+        window.addEventListener('mousedown', () => {
+            if (!controls.isLocked) return;
+            
+            // Check what the player is looking at
+            raycaster.setFromCamera(new THREE.Vector2(), camera);
+            const intersects = raycaster.intersectObjects(targets);
+            
+            if (intersects.length > 0) {
+                const obj = intersects[0].object;
+                scene.remove(obj); // "Kill" target
+                targets.splice(targets.indexOf(obj), 1);
+                score++;
+                document.getElementById('score').innerText = score;
+                spawnTarget(); // Spawn a new one
+            }
+        });
+
+        // 6. Target Spawner
+        function spawnTarget() {
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
+            const cube = new THREE.Mesh(geometry, material);
+            cube.position.set((Math.random() - 0.5) * 20, 1, (Math.random() - 0.5) * 20);
+            scene.add(cube);
+            targets.push(cube);
+        }
+        for(let i=0; i<5; i++) spawnTarget(); // Initial targets
+
+        // 7. Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
