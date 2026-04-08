@@ -2,24 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D GitHub Striker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D GitHub Striker v2</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         #crosshair { position: fixed; top: 50%; left: 50%; width: 10px; height: 10px; 
-                     border: 2px solid #0f0; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
-        #ui { position: fixed; top: 20px; left: 20px; color: #0f0; font-size: 24px; text-shadow: 2px 2px #000; }
-        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8);
-                display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; cursor: pointer; }
+                     border: 2px solid #0f0; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; }
+        #ui { position: fixed; top: 20px; left: 20px; color: #0f0; font-size: 24px; z-index: 10; }
+        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9);
+                display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; cursor: pointer; z-index: 20; }
     </style>
 </head>
 <body>
     <div id="menu">
-        <h1>3D GITHUB SHOOTER</h1>
-        <p>CLICK TO PLAY</p>
-        <p style="font-size: 0.8em;">(WASD to Move | Mouse to Look | Click to Shoot)</p>
+        <h1 style="font-size: 3em; margin-bottom: 10px;">READY TO SHOOT?</h1>
+        <p style="font-size: 1.5em; color: #0f0;">CLICK ANYWHERE TO START</p>
+        <p style="margin-top: 20px; color: #888;">WASD: Move | Mouse: Aim | Click: Fire</p>
     </div>
     <div id="crosshair"></div>
-    <div id="ui">KILLS: <span id="score">0</span></div>
+    <div id="ui">TARGETS DESTROYED: <span id="score">0</span></div>
 
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com" } }
@@ -29,120 +30,118 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'https://unpkg.com';
 
-        // --- ENGINE SETUP ---
+        // 1. SCENE SETUP
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111111);
-        scene.fog = new THREE.Fog(0x111111, 0, 50);
+        scene.background = new THREE.Color(0x050505);
+        scene.fog = new THREE.Fog(0x000000, 0, 100);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // --- LIGHTING ---
-        const light = new THREE.AmbientLight(0x404040); scene.add(light);
-        const sun = new THREE.DirectionalLight(0xffffff, 1); sun.position.set(10, 20, 10); scene.add(sun);
+        // 2. LIGHTING
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+        const dirLight = new THREE.DirectionalLight(0x00ff00, 1);
+        dirLight.position.set(5, 10, 7.5);
+        scene.add(dirLight);
 
-        // --- THE WORLD ---
-        const grid = new THREE.GridHelper(200, 50, 0xff0000, 0x222222);
-        scene.add(grid);
-
-        // --- THE GUN (Visual Only) ---
-        const gun = new THREE.Mesh(
-            new THREE.BoxGeometry(0.2, 0.2, 0.7),
-            new THREE.MeshStandardMaterial({ color: 0x555555 })
+        // 3. THE WORLD (Floor & Gun)
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(200, 200),
+            new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 })
         );
-        camera.add(gun);
-        gun.position.set(0.4, -0.3, -0.6); // Position in front of camera
-        scene.add(camera);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
 
-        // --- CONTROLS & MOVEMENT ---
+        const gun = new THREE.Mesh(
+            new THREE.BoxGeometry(0.15, 0.15, 0.6),
+            new THREE.MeshStandardMaterial({ color: 0x333333 })
+        );
+        gun.position.set(0.3, -0.2, -0.5);
+        camera.add(gun);
+        scene.add(camera); // Required because gun is a child of camera
+
+        // 4. CONTROLS
         const controls = new PointerLockControls(camera, document.body);
         const menu = document.getElementById('menu');
-        menu.addEventListener('click', () => controls.lock());
+
+        // FIXED LOCK LOGIC: Trigger lock IMMEDIATELY on click
+        menu.addEventListener('click', () => {
+            controls.lock();
+        });
+
         controls.addEventListener('lock', () => menu.style.display = 'none');
         controls.addEventListener('unlock', () => menu.style.display = 'flex');
 
-        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        const onKeyDown = (e) => {
-            if(e.code === 'KeyW') moveForward = true;
-            if(e.code === 'KeyS') moveBackward = true;
-            if(e.code === 'KeyA') moveLeft = true;
-            if(e.code === 'KeyD') moveRight = true;
-        };
-        const onKeyUp = (e) => {
-            if(e.code === 'KeyW') moveForward = false;
-            if(e.code === 'KeyS') moveBackward = false;
-            if(e.code === 'KeyA') moveLeft = false;
-            if(e.code === 'KeyD') moveRight = false;
-        };
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('keyup', onKeyUp);
-
-        // --- SHOOTING & TARGETS ---
+        // 5. TARGETS
         const targets = [];
         let score = 0;
         const raycaster = new THREE.Raycaster();
 
-        function spawnTarget() {
+        function createTarget() {
             const cube = new THREE.Mesh(
                 new THREE.BoxGeometry(2, 2, 2),
-                new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x330000 })
+                new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x550000 })
             );
-            cube.position.set((Math.random()-0.5)*80, 1, (Math.random()-0.5)*80);
+            cube.position.set((Math.random() - 0.5) * 60, 1, (Math.random() - 0.5) * 60);
             scene.add(cube);
             targets.push(cube);
         }
-        for(let i=0; i<15; i++) spawnTarget();
+        for(let i=0; i<10; i++) createTarget();
 
+        // 6. SHOOTING
         window.addEventListener('mousedown', () => {
             if (!controls.isLocked) return;
-            
-            // Gun Kick Animation
-            gun.position.z += 0.1;
-            setTimeout(() => gun.position.z -= 0.1, 50);
+
+            // Recoil
+            gun.position.z += 0.05;
+            setTimeout(() => gun.position.z -= 0.05, 40);
 
             raycaster.setFromCamera(new THREE.Vector2(), camera);
             const hits = raycaster.intersectObjects(targets);
-            
             if (hits.length > 0) {
-                const obj = hits[0].object;
-                scene.remove(obj);
-                targets.splice(targets.indexOf(obj), 1);
+                const target = hits[0].object;
+                scene.remove(target);
+                targets.splice(targets.indexOf(target), 1);
                 score++;
                 document.getElementById('score').innerText = score;
-                spawnTarget(); // Keep the action going
+                createTarget();
             }
         });
 
-        // --- GAME LOOP ---
-        const velocity = new THREE.Vector3();
-        const direction = new THREE.Vector3();
+        // 7. MOVEMENT
+        let moveF = false, moveB = false, moveL = false, moveR = false;
+        document.addEventListener('keydown', (e) => {
+            if(e.code === 'KeyW') moveF = true;
+            if(e.code === 'KeyS') moveB = true;
+            if(e.code === 'KeyA') moveL = true;
+            if(e.code === 'KeyD') moveR = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            if(e.code === 'KeyW') moveF = false;
+            if(e.code === 'KeyS') moveB = false;
+            if(e.code === 'KeyA') moveL = false;
+            if(e.code === 'KeyD') moveR = false;
+        });
 
+        // 8. ANIMATION LOOP
+        const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
-            
             if (controls.isLocked) {
-                const delta = 0.15; // Speed
-                velocity.x -= velocity.x * 10.0 * delta;
-                velocity.z -= velocity.z * 10.0 * delta;
-
-                direction.z = Number(moveForward) - Number(moveBackward);
-                direction.x = Number(moveRight) - Number(moveLeft);
-                direction.normalize();
-
-                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
-                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
-
-                controls.moveRight(-velocity.x * delta);
-                controls.moveForward(-velocity.z * delta);
+                const delta = clock.getDelta();
+                const speed = 15;
+                if (moveF) controls.moveForward(speed * delta);
+                if (moveB) controls.moveForward(-speed * delta);
+                if (moveL) controls.moveRight(-speed * delta);
+                if (moveR) controls.moveRight(speed * delta);
             }
-
             renderer.render(scene, camera);
         }
         animate();
 
-        // Handle Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
