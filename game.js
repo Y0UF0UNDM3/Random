@@ -1,75 +1,94 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'https://unpkg.com';
+import { GLTFLoader } from 'https://unpkg.com';
 
-// --- INITIALIZATION ---
+// --- SETUP ---
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB); // Sky Blue
+scene.fog = new THREE.Fog(0x87CEEB, 0, 200);
+
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 const controls = new PointerLockControls(camera, document.body);
-const targets = [];
-let score = 0;
+document.addEventListener('click', () => controls.lock());
 
-// --- WORLD SETUP ---
-scene.background = new THREE.Color(0x050505);
-scene.add(new THREE.GridHelper(100, 20, 0x00ff00, 0x222222));
-scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-camera.position.y = 1.6;
+// --- LIGHTING ---
+const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+scene.add(ambient);
+const sun = new THREE.DirectionalLight(0xffffff, 1);
+sun.position.set(50, 100, 50);
+scene.add(sun);
 
-// --- MENU FUNCTIONS ---
-window.togglePanel = (id) => {
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    if (id) document.getElementById(id).classList.add('active');
-};
+// --- LOAD TERRAIN ---
+const loader = new GLTFLoader();
+loader.load('assets/models/terrain/terrain.glb', (gltf) => {
+    const terrain = gltf.scene;
+    scene.add(terrain);
+    console.log("Terrain Loaded Successfully");
+}, undefined, (err) => console.error("Terrain failed to load. Check path."));
 
-document.getElementById('start-btn').addEventListener('click', () => {
-    controls.lock();
-});
+// --- BUILDING SYSTEM ---
+const objects = []; // List of buildable blocks
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const boxMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Wood/Dirt color
 
-controls.addEventListener('lock', () => {
-    document.getElementById('main-menu').classList.add('hidden');
-    document.getElementById('game-ui').classList.remove('hidden');
-});
-
-controls.addEventListener('unlock', () => {
-    document.getElementById('main-menu').classList.remove('hidden');
-    document.getElementById('game-ui').classList.add('hidden');
-});
-
-// --- GAMEPLAY ---
-function spawnTarget() {
-    const cube = new THREE.Mesh(
-        new THREE.BoxGeometry(2, 2, 2),
-        new THREE.MeshStandardMaterial({ color: 0xff0000 })
-    );
-    cube.position.set((Math.random()-0.5)*50, 1, (Math.random()-0.5)*50);
-    scene.add(cube);
-    targets.push(cube);
-}
-
-for(let i=0; i<10; i++) spawnTarget();
-
-window.addEventListener('mousedown', () => {
+window.addEventListener('mousedown', (event) => {
     if (!controls.isLocked) return;
+
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(), camera);
-    const hits = raycaster.intersectObjects(targets);
-    
-    if (hits.length > 0) {
-        scene.remove(hits[0].object);
-        targets.splice(targets.indexOf(hits[0].object), 1);
-        score++;
-        document.getElementById('score').innerText = score;
-        document.getElementById('kill-count').innerText = score;
-        spawnTarget();
+    const intersects = raycaster.intersectObjects(scene.children, true);
+
+    if (intersects.length > 0) {
+        const intersect = intersects[0];
+
+        // LEFT CLICK: Build
+        if (event.button === 0) {
+            const voxel = new THREE.Mesh(boxGeo, boxMat);
+            voxel.position.copy(intersect.point).add(intersect.face.normal);
+            voxel.position.divideScalar(1).floor().addScalar(0.5); // Grid snapping
+            scene.add(voxel);
+            objects.push(voxel);
+        }
+        
+        // RIGHT CLICK: Delete (Only blocks you built)
+        if (event.button === 2) {
+            if (objects.includes(intersect.object)) {
+                scene.remove(intersect.object);
+                objects.splice(objects.indexOf(intersect.object), 1);
+            }
+        }
     }
 });
 
-// --- ENGINE LOOP ---
+// Disable right-click menu
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// --- MOVEMENT ---
+let keys = {};
+document.onkeydown = (e) => keys[e.code] = true;
+document.onkeyup = (e) => keys[e.code] = false;
+
 function animate() {
     requestAnimationFrame(animate);
+    
+    if (controls.isLocked) {
+        const speed = 0.2;
+        if (keys['KeyW']) controls.moveForward(speed);
+        if (keys['KeyS']) controls.moveForward(-speed);
+        if (keys['KeyA']) controls.moveRight(-speed);
+        if (keys['KeyD']) controls.moveRight(speed);
+    }
+    
     renderer.render(scene, camera);
 }
 animate();
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
