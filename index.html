@@ -2,20 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D GitHub Shooter</title>
+    <title>3D GitHub Striker</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: Arial; }
-        #crosshair { position: fixed; top: 50%; left: 50%; width: 20px; height: 20px; 
-                     border: 2px solid red; border-radius: 50%; transform: translate(-50%, -50%); 
-                     pointer-events: none; }
-        #ui { position: fixed; bottom: 20px; left: 20px; color: white; font-size: 24px; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', Courier, monospace; }
+        #crosshair { position: fixed; top: 50%; left: 50%; width: 10px; height: 10px; 
+                     border: 2px solid #0f0; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        #ui { position: fixed; top: 20px; left: 20px; color: #0f0; font-size: 24px; text-shadow: 2px 2px #000; }
+        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8);
+                display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; cursor: pointer; }
     </style>
 </head>
 <body>
+    <div id="menu">
+        <h1>3D GITHUB SHOOTER</h1>
+        <p>CLICK TO PLAY</p>
+        <p style="font-size: 0.8em;">(WASD to Move | Mouse to Look | Click to Shoot)</p>
+    </div>
     <div id="crosshair"></div>
-    <div id="ui">Score: <span id="score">0</span></div>
+    <div id="ui">KILLS: <span id="score">0</span></div>
 
-    <!-- Import Three.js and PointerLockControls from CDN -->
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com" } }
     </script>
@@ -24,69 +29,125 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'https://unpkg.com';
 
-        // 1. Setup Scene, Camera, and Renderer
+        // --- ENGINE SETUP ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87ceeb); // Sky blue
+        scene.background = new THREE.Color(0x111111);
+        scene.fog = new THREE.Fog(0x111111, 0, 50);
+
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // 2. Add Lighting
-        const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
-        scene.add(light);
+        // --- LIGHTING ---
+        const light = new THREE.AmbientLight(0x404040); scene.add(light);
+        const sun = new THREE.DirectionalLight(0xffffff, 1); sun.position.set(10, 20, 10); scene.add(sun);
 
-        // 3. Create the World (Ground)
-        const planeGeo = new THREE.PlaneGeometry(100, 100);
-        const planeMat = new THREE.MeshPhongMaterial({ color: 0x228b22 });
-        const floor = new THREE.Mesh(planeGeo, planeMat);
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
+        // --- THE WORLD ---
+        const grid = new THREE.GridHelper(200, 50, 0xff0000, 0x222222);
+        scene.add(grid);
 
-        // 4. Player Controls
+        // --- THE GUN (Visual Only) ---
+        const gun = new THREE.Mesh(
+            new THREE.BoxGeometry(0.2, 0.2, 0.7),
+            new THREE.MeshStandardMaterial({ color: 0x555555 })
+        );
+        camera.add(gun);
+        gun.position.set(0.4, -0.3, -0.6); // Position in front of camera
+        scene.add(camera);
+
+        // --- CONTROLS & MOVEMENT ---
         const controls = new PointerLockControls(camera, document.body);
-        document.addEventListener('click', () => controls.lock());
-        camera.position.set(0, 1.6, 5); // Human height
+        const menu = document.getElementById('menu');
+        menu.addEventListener('click', () => controls.lock());
+        controls.addEventListener('lock', () => menu.style.display = 'none');
+        controls.addEventListener('unlock', () => menu.style.display = 'flex');
 
-        // 5. Shooting Logic (Raycasting)
-        const raycaster = new THREE.Raycaster();
-        let score = 0;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        const onKeyDown = (e) => {
+            if(e.code === 'KeyW') moveForward = true;
+            if(e.code === 'KeyS') moveBackward = true;
+            if(e.code === 'KeyA') moveLeft = true;
+            if(e.code === 'KeyD') moveRight = true;
+        };
+        const onKeyUp = (e) => {
+            if(e.code === 'KeyW') moveForward = false;
+            if(e.code === 'KeyS') moveBackward = false;
+            if(e.code === 'KeyA') moveLeft = false;
+            if(e.code === 'KeyD') moveRight = false;
+        };
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+
+        // --- SHOOTING & TARGETS ---
         const targets = [];
+        let score = 0;
+        const raycaster = new THREE.Raycaster();
+
+        function spawnTarget() {
+            const cube = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 2, 2),
+                new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x330000 })
+            );
+            cube.position.set((Math.random()-0.5)*80, 1, (Math.random()-0.5)*80);
+            scene.add(cube);
+            targets.push(cube);
+        }
+        for(let i=0; i<15; i++) spawnTarget();
 
         window.addEventListener('mousedown', () => {
             if (!controls.isLocked) return;
             
-            // Check what the player is looking at
+            // Gun Kick Animation
+            gun.position.z += 0.1;
+            setTimeout(() => gun.position.z -= 0.1, 50);
+
             raycaster.setFromCamera(new THREE.Vector2(), camera);
-            const intersects = raycaster.intersectObjects(targets);
+            const hits = raycaster.intersectObjects(targets);
             
-            if (intersects.length > 0) {
-                const obj = intersects[0].object;
-                scene.remove(obj); // "Kill" target
+            if (hits.length > 0) {
+                const obj = hits[0].object;
+                scene.remove(obj);
                 targets.splice(targets.indexOf(obj), 1);
                 score++;
                 document.getElementById('score').innerText = score;
-                spawnTarget(); // Spawn a new one
+                spawnTarget(); // Keep the action going
             }
         });
 
-        // 6. Target Spawner
-        function spawnTarget() {
-            const geometry = new THREE.BoxGeometry(1, 1, 1);
-            const material = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff });
-            const cube = new THREE.Mesh(geometry, material);
-            cube.position.set((Math.random() - 0.5) * 20, 1, (Math.random() - 0.5) * 20);
-            scene.add(cube);
-            targets.push(cube);
-        }
-        for(let i=0; i<5; i++) spawnTarget(); // Initial targets
+        // --- GAME LOOP ---
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
 
-        // 7. Animation Loop
         function animate() {
             requestAnimationFrame(animate);
+            
+            if (controls.isLocked) {
+                const delta = 0.15; // Speed
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                if (moveForward || moveBackward) velocity.z -= direction.z * 400.0 * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 400.0 * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+            }
+
             renderer.render(scene, camera);
         }
         animate();
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     </script>
 </body>
 </html>
