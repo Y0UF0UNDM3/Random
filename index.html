@@ -2,40 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D Striker | GitHub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Explorer & Builder</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <!-- Menu UI -->
-    <div id="ui-container">
-        <div id="main-menu" class="overlay">
-            <h1>STRIKER 3D</h1>
-            <nav class="btn-group">
-                <button id="start-btn">Start Game</button>
-                <button onclick="togglePanel('settings')">Settings</button>
-                <button onclick="togglePanel('profile')">Profile</button>
-            </nav>
+    <div id="crosshair"></div>
+    <div id="instructions">CLICK TO EXPLORE & BUILD<br>(WASD: Move | Left Click: Place | Right Click: Delete)</div>
 
-            <div id="settings" class="panel">
-                <h2>Settings</h2>
-                <p>Sensitivity <input type="range"></p>
-                <button onclick="togglePanel()">Back</button>
-            </div>
-
-            <div id="profile" class="panel">
-                <h2>Profile</h2>
-                <p>Kills: <span id="kill-count">0</span></p>
-                <button onclick="togglePanel()">Back</button>
-            </div>
-        </div>
-
-        <div id="game-ui" class="hidden">
-            <div id="crosshair"></div>
-            <div id="stats">KILLS: <span id="score">0</span></div>
-        </div>
-    </div>
-
-    <!-- Load Game Logic -->
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com" } }
     </script>
