@@ -2,25 +2,63 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D GitHub Striker v2</title>
+    <title>3D GitHub Striker: Deluxe Edition</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: white; }
+        
+        /* --- MENU SYSTEM --- */
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, #222 0%, #000 100%);
+                   display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; transition: 0.5s; }
+        .hidden { display: none !important; }
+
+        h1 { font-size: 4em; margin-bottom: 20px; color: #0f0; text-shadow: 0 0 20px #0f0; letter-spacing: 5px; }
+        .btn-group { display: flex; flex-direction: column; gap: 15px; width: 300px; }
+        
+        button { padding: 15px; font-size: 1.2em; cursor: pointer; background: transparent; border: 2px solid #0f0; color: #0f0; 
+                 text-transform: uppercase; transition: 0.3s; font-weight: bold; }
+        button:hover { background: #0f0; color: #000; box-shadow: 0 0 30px #0f0; }
+
+        /* --- SUB-MENUS --- */
+        .sub-panel { display: none; background: rgba(0,0,0,0.9); border: 2px solid #0f0; padding: 30px; border-radius: 10px; width: 400px; text-align: center; }
+        .active-panel { display: block; }
+
+        /* --- IN-GAME UI --- */
         #crosshair { position: fixed; top: 50%; left: 50%; width: 10px; height: 10px; 
-                     border: 2px solid #0f0; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; }
-        #ui { position: fixed; top: 20px; left: 20px; color: #0f0; font-size: 24px; z-index: 10; }
-        #menu { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9);
-                display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; cursor: pointer; z-index: 20; }
+                     border: 2px solid #0f0; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; display: none; }
+        #score-board { position: fixed; top: 20px; left: 20px; font-size: 24px; color: #0f0; display: none; }
     </style>
 </head>
 <body>
-    <div id="menu">
-        <h1 style="font-size: 3em; margin-bottom: 10px;">READY TO SHOOT?</h1>
-        <p style="font-size: 1.5em; color: #0f0;">CLICK ANYWHERE TO START</p>
-        <p style="margin-top: 20px; color: #888;">WASD: Move | Mouse: Aim | Click: Fire</p>
+
+    <!-- Main Menu -->
+    <div id="main-menu" class="overlay">
+        <h1>STRIKER 3D</h1>
+        <div id="button-container" class="btn-group">
+            <button onclick="startGame()">Start Game</button>
+            <button onclick="showPanel('settings-panel')">Settings</button>
+            <button onclick="showPanel('profile-panel')">Profile</button>
+        </div>
+
+        <!-- Settings Panel -->
+        <div id="settings-panel" class="sub-panel">
+            <h2>SETTINGS</h2>
+            <p>Sensitivity: <input type="range" min="1" max="10" value="5"></p>
+            <p>Difficulty: <select><option>Noob</option><option selected>Gamer</option><option>Pro</option></select></p>
+            <button onclick="hidePanels()">Back</button>
+        </div>
+
+        <!-- Profile Panel -->
+        <div id="profile-panel" class="sub-panel">
+            <h2>PLAYER PROFILE</h2>
+            <p>Username: <b>GitHub_Warrior</b></p>
+            <p>Rank: <b>Recruit</b></p>
+            <p>Kills: <span id="profile-score">0</span></p>
+            <button onclick="hidePanels()">Back</button>
+        </div>
     </div>
+
     <div id="crosshair"></div>
-    <div id="ui">TARGETS DESTROYED: <span id="score">0</span></div>
+    <div id="score-board">KILLS: <span id="score">0</span></div>
 
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com" } }
@@ -30,123 +68,96 @@
         import * as THREE from 'three';
         import { PointerLockControls } from 'https://unpkg.com';
 
-        // 1. SCENE SETUP
+        // --- MENU LOGIC ---
+        window.showPanel = (id) => {
+            document.getElementById('button-container').classList.add('hidden');
+            document.getElementById(id).classList.add('active-panel');
+        };
+        window.hidePanels = () => {
+            document.querySelectorAll('.sub-panel').forEach(p => p.classList.remove('active-panel'));
+            document.getElementById('button-container').classList.remove('hidden');
+        };
+        window.startGame = () => {
+            document.getElementById('main-menu').classList.add('hidden');
+            document.getElementById('crosshair').style.display = 'block';
+            document.getElementById('score-board').style.display = 'block';
+            controls.lock(); // Start the 3D camera
+        };
+
+        // --- 3D ENGINE SETUP ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x050505);
-        scene.fog = new THREE.Fog(0x000000, 0, 100);
+        scene.fog = new THREE.Fog(0x000000, 0, 80);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // 2. LIGHTING
+        // Ground & Lights
+        const grid = new THREE.GridHelper(200, 40, 0x00ff00, 0x222222);
+        scene.add(grid);
         scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-        const dirLight = new THREE.DirectionalLight(0x00ff00, 1);
-        dirLight.position.set(5, 10, 7.5);
-        scene.add(dirLight);
 
-        // 3. THE WORLD (Floor & Gun)
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(200, 200),
-            new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 })
-        );
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
-
-        const gun = new THREE.Mesh(
-            new THREE.BoxGeometry(0.15, 0.15, 0.6),
-            new THREE.MeshStandardMaterial({ color: 0x333333 })
-        );
-        gun.position.set(0.3, -0.2, -0.5);
-        camera.add(gun);
-        scene.add(camera); // Required because gun is a child of camera
-
-        // 4. CONTROLS
         const controls = new PointerLockControls(camera, document.body);
-        const menu = document.getElementById('menu');
+        camera.position.set(0, 1.6, 5);
 
-        // FIXED LOCK LOGIC: Trigger lock IMMEDIATELY on click
-        menu.addEventListener('click', () => {
-            controls.lock();
-        });
-
-        controls.addEventListener('lock', () => menu.style.display = 'none');
-        controls.addEventListener('unlock', () => menu.style.display = 'flex');
-
-        // 5. TARGETS
+        // --- TARGET SYSTEM ---
         const targets = [];
         let score = 0;
         const raycaster = new THREE.Raycaster();
 
-        function createTarget() {
-            const cube = new THREE.Mesh(
-                new THREE.BoxGeometry(2, 2, 2),
-                new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x550000 })
-            );
-            cube.position.set((Math.random() - 0.5) * 60, 1, (Math.random() - 0.5) * 60);
+        function spawnTarget() {
+            const geo = new THREE.BoxGeometry(2, 2, 2);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.5 });
+            const cube = new THREE.Mesh(geo, mat);
+            cube.position.set((Math.random()-0.5)*60, 1, (Math.random()-0.5)*60);
             scene.add(cube);
             targets.push(cube);
         }
-        for(let i=0; i<10; i++) createTarget();
+        for(let i=0; i<12; i++) spawnTarget();
 
-        // 6. SHOOTING
+        // Shooting
         window.addEventListener('mousedown', () => {
             if (!controls.isLocked) return;
-
-            // Recoil
-            gun.position.z += 0.05;
-            setTimeout(() => gun.position.z -= 0.05, 40);
-
             raycaster.setFromCamera(new THREE.Vector2(), camera);
             const hits = raycaster.intersectObjects(targets);
             if (hits.length > 0) {
-                const target = hits[0].object;
-                scene.remove(target);
-                targets.splice(targets.indexOf(target), 1);
+                scene.remove(hits[0].object);
+                targets.splice(targets.indexOf(hits[0].object), 1);
                 score++;
                 document.getElementById('score').innerText = score;
-                createTarget();
+                document.getElementById('profile-score').innerText = score;
+                spawnTarget();
             }
         });
 
-        // 7. MOVEMENT
-        let moveF = false, moveB = false, moveL = false, moveR = false;
-        document.addEventListener('keydown', (e) => {
-            if(e.code === 'KeyW') moveF = true;
-            if(e.code === 'KeyS') moveB = true;
-            if(e.code === 'KeyA') moveL = true;
-            if(e.code === 'KeyD') moveR = true;
-        });
-        document.addEventListener('keyup', (e) => {
-            if(e.code === 'KeyW') moveF = false;
-            if(e.code === 'KeyS') moveB = false;
-            if(e.code === 'KeyA') moveL = false;
-            if(e.code === 'KeyD') moveR = false;
-        });
+        // Movement
+        let move = { f: false, b: false, l: false, r: false };
+        document.onkeydown = (e) => {
+            if(e.code === 'KeyW') move.f = true;
+            if(e.code === 'KeyS') move.b = true;
+            if(e.code === 'KeyA') move.l = true;
+            if(e.code === 'KeyD') move.r = true;
+        };
+        document.onkeyup = (e) => {
+            if(e.code === 'KeyW') move.f = false;
+            if(e.code === 'KeyS') move.b = false;
+            if(e.code === 'KeyA') move.l = false;
+            if(e.code === 'KeyD') move.r = false;
+        };
 
-        // 8. ANIMATION LOOP
-        const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
             if (controls.isLocked) {
-                const delta = clock.getDelta();
-                const speed = 15;
-                if (moveF) controls.moveForward(speed * delta);
-                if (moveB) controls.moveForward(-speed * delta);
-                if (moveL) controls.moveRight(-speed * delta);
-                if (moveR) controls.moveRight(speed * delta);
+                if(move.f) controls.moveForward(0.15);
+                if(move.b) controls.moveForward(-0.15);
+                if(move.l) controls.moveRight(-0.15);
+                if(move.r) controls.moveRight(0.15);
             }
             renderer.render(scene, camera);
         }
         animate();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
